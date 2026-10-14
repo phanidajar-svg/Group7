@@ -551,15 +551,17 @@ with tab2:
         }}
       }};
 
-      function buildSteps() {{
+     function buildSteps() {{
         steps = [];
         const activeNodes = nodes.filter(n => !n.isDeleted);
+        
         if (algo === 'dijkstra') {{
+          // --- DIJKSTRA'S ALGORITHM ---
           const adj = {{}}; activeNodes.forEach(n => adj[n.id] = []);
           edges.forEach(e => {{ 
             if(adj[e.a] && adj[e.b]) {{
-              adj[e.a].push({{ to: e.b, w: e.w }}); 
-              adj[e.b].push({{ to: e.a, w: e.w }}); 
+              adj[e.a].push(Object.assign({{}}, {{ to: e.b, w: e.w }})); 
+              adj[e.b].push(Object.assign({{}}, {{ to: e.a, w: e.w }})); 
             }}
           }});
           
@@ -567,7 +569,7 @@ with tab2:
           activeNodes.forEach(n => dist[n.id] = Infinity); 
           if(N(startId)) dist[startId] = 0;
 
-          steps.push({{ msg: 'เริ่มที่ ' + nm(startId) + ' ตั้งระยะเป็น 0 นาที', current: startId, visited: [] }});
+          steps.push(Object.assign({{}}, {{ msg: 'เริ่มที่ ' + nm(startId) + ' ตั้งระยะเป็น 0 นาที', current: startId, visited: [] }}));
 
           for (;;) {{
             let u = null, best = Infinity;
@@ -575,41 +577,43 @@ with tab2:
             if (u === null) break;
             done.add(u);
 
-            steps.push({{
+            steps.push(Object.assign({{}}, {{
               msg: 'พิจารณาจุด ' + nm(u) + ' (ระยะสั้นสุดในกลุ่ม = ' + best + ' นาที) -> ยืนยันระยะ',
               current: u, visited: [...done], treeEdges: Object.keys(prev).map(v => key(+v, prev[v]))
-            }});
+            }}));
 
             if (u === endId) break;
 
-            for (const {{ to, w }} of (adj[u] || [])) {{
+            for (const item of (adj[u] || [])) {{
+              const to = item.to, w = item.w;
               if (done.has(to)) continue;
               const nd = dist[u] + w;
               if (nd < dist[to]) {{
                 dist[to] = nd; prev[to] = u;
-                steps.push({{
+                steps.push(Object.assign({{}}, {{
                   msg: 'สแกนผ่าน ' + nm(u) + ' ไป ' + nm(to) + ' (ได้ ' + nd + ' นาที) -> อัปเดตทางเลือกใหม่',
                   current: u, focus: key(u, to), visited: [...done], treeEdges: Object.keys(prev).map(v => key(+v, prev[v]))
-                }});
+                }}));
               }}
             }}
           }}
 
           if (dist[endId] !== Infinity && dist[endId] !== undefined) {{
             const p = pathTo(prev, endId);
-            steps.push({{
+            steps.push(Object.assign({{}}, {{
               msg: '🎉 ได้เส้นทางสั้นที่สุดจาก ' + nm(startId) + ' ไป ' + nm(endId) + ' รวม ' + dist[endId] + ' นาที!',
               pathNodes: p, pathEdges: edgesOfPath(p), visited: [...done]
-            }});
+            }}));
           }} else {{
-            steps.push({{
+            steps.push(Object.assign({{}}, {{
               msg: '⚠️ ไม่สามารถเดินทางไปถึง ' + nm(endId) + ' ได้ (ไม่มีเส้นทางเชื่อมต่อ)',
               visited: [...done], isError: true
-            }});
+            }}));
           }}
-        }} else {{
+        }} else if (algo === 'prim') {{
+          // --- PRIM'S ALGORITHM ---
           let inT = new Set([startId]), tree = [];
-          steps.push({{ msg: 'เริ่มเชื่อมโครงข่ายจาก ' + nm(startId), current: startId, visited: [startId] }});
+          steps.push(Object.assign({{}}, {{ msg: 'เริ่ม Prim จากจุด ' + nm(startId), current: startId, visited: [startId] }}));
           while (inT.size < activeNodes.length) {{
             let best = null;
             edges.forEach(e => {{
@@ -618,14 +622,56 @@ with tab2:
             if (!best) break;
             let nv = inT.has(best.a) ? best.b : best.a;
             inT.add(nv); tree.push(key(best.a, best.b));
-            steps.push({{
-              msg: 'เลือกเส้นไป ' + nm(nv) + ' (น้ำหนัก ' + best.w + ')',
+            steps.push(Object.assign({{}}, {{
+              msg: 'เลือกเส้น ' + nm(best.a) + '-' + nm(best.b) + ' (น้ำหนัก ' + best.w + ') ไปจุด ' + nm(nv),
               current: nv, visited: [...inT], focus: key(best.a, best.b), pathEdges: [...tree]
-            }});
+            }}));
+          }}
+        }} else if (algo === 'kruskal') {{
+          // --- KRUSKAL'S ALGORITHM (เรียงน้ำหนักน้อยไปมาก) ---
+          const parent = {{}};
+          activeNodes.forEach(n => parent[n.id] = n.id);
+          function find(i) {{
+            if (parent[i] === i) return i;
+            return parent[i] = find(parent[i]);
+          }}
+          function union(i, j) {{
+            const rootI = find(i), rootJ = find(j);
+            if (rootI !== rootJ) {{ parent[rootI] = rootJ; return true; }}
+            return false;
+          }}
+
+          const validEdges = edges.filter(e => N(e.a) && N(e.b));
+          const sortedEdges = [...validEdges].sort((x, y) => x.w - y.w);
+          const tree = [];
+          const visitedNodes = new Set();
+
+          steps.push(Object.assign({{}}, {{ msg: 'เริ่ม Kruskal: เรียงลำดับเส้นเชื่อมทั้งหมดตามน้ำหนักจากน้อยไปมาก', visited: [] }}));
+
+          for (const e of sortedEdges) {{
+            const k = key(e.a, e.b);
+            if (union(e.a, e.b)) {{
+              tree.push(k);
+              visitedNodes.add(e.a);
+              visitedNodes.add(e.b);
+              steps.push(Object.assign({{}}, {{
+                msg: 'เลือกเส้นสั้นที่สุดถัดไป ' + nm(e.a) + '-' + nm(e.b) + ' (น้ำหนัก ' + e.w + ') -> ไม่เกิดวงรอบ (Circle)',
+                focus: k,
+                pathEdges: [...tree],
+                visited: [...visitedNodes]
+              }}));
+            }} else {{
+              steps.push(Object.assign({{}}, {{
+                msg: 'ข้ามเส้น ' + nm(e.a) + '-' + nm(e.b) + ' (น้ำหนัก ' + e.w + ') -> เกิดวงรอบ (Circle)',
+                focus: k,
+                pathEdges: [...tree],
+                visited: [...visitedNodes]
+              }}));
+            }}
+            if (tree.length === activeNodes.length - 1) break;
           }}
         }}
       }}
-
       function render() {{
         const st = idx >= 0 ? steps[idx] : null;
         const tree = new Set(st && st.treeEdges || []);

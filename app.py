@@ -5,14 +5,59 @@ import json
 import time
 
 # =============================================================================
-# 1) PAGE SETUP
+# 1) PAGE SETUP & CUSTOM GLOBAL CSS
 # =============================================================================
 st.set_page_config(page_title="Route Lab", page_icon="🗺️", layout="wide")
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 1rem; padding-bottom: 0rem; }
-    div[data-testid="stMetricValue"] { font-size: 26px; font-weight: bold; }
+    /* 1. ปรับขนาดฟอนต์หลักและระยะขอบ */
+    .block-container { padding-top: 1rem; padding-bottom: 0rem; max-width: 100%; }
+    html, body, [class*="css"] { font-size: 18px !important; }
+
+    /* 2. ปรับขยายขนาดแท็บเมนู (Tabs) */
+    button[data-baseweb="tab"] {
+        font-size: 20px !important;
+        font-weight: 600 !important;
+        padding: 10px 20px !important;
+    }
+
+    /* 3. ปรับขยาย Sidebar (แถบด้านข้าง) */
+    [data-testid="stSidebar"] {
+        font-size: 18px !important;
+    }
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+        font-size: 22px !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stSidebar"] label {
+        font-size: 18px !important;
+        font-weight: 600 !important;
+    }
+
+    /* 4. ปรับขยายช่องกรอกข้อความ (Text Input), Selectbox และ Radio Button */
+    div[data-baseweb="input"] input {
+        font-size: 18px !important;
+        padding: 8px 12px !important;
+    }
+    div[data-baseweb="select"] div {
+        font-size: 18px !important;
+    }
+    div[class*="stRadio"] label {
+        font-size: 18px !important;
+    }
+
+    /* 5. ปรับขยายปุ่มกด (Buttons) ใน Sidebar */
+    [data-testid="stSidebar"] button {
+        font-size: 18px !important;
+        padding: 10px 16px !important;
+        border-radius: 8px !important;
+    }
+
+    /* 6. ตัวเลข Metric */
+    div[data-testid="stMetricValue"] { font-size: 28px !important; font-weight: bold; }
+
+    iframe { width: 100% !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -200,7 +245,7 @@ def solve_dijkstra(nodes, edges, s_id, t_id):
     return dist.get(t_id, float('inf')), path, path_edges
 
 def solve_mst(nodes, edges, s_id):
-    if not nodes: return 0, []
+    if not nodes: return 0, [], False
     node_ids = set([n['id'] for n in nodes])
     start_node = s_id if s_id in node_ids else list(node_ids)[0]
     
@@ -218,10 +263,12 @@ def solve_mst(nodes, edges, s_id):
         in_t.add(nv)
         tree_edges.append(make_key(best['a'], best['b']))
         total_w += best['w']
-    return total_w, tree_edges
+        
+    is_complete = (len(tree_edges) == len(nodes) - 1)
+    return total_w, tree_edges, is_complete
 
 def solve_kruskal(nodes, edges):
-    if not nodes: return 0, []
+    if not nodes: return 0, [], False
     parent = {n['id']: n['id'] for n in nodes}
     def find(i):
         if parent[i] == i:
@@ -246,7 +293,9 @@ def solve_kruskal(nodes, edges):
             if union(e['a'], e['b']):
                 total_w += e['w']
                 mst_edges.append(make_key(e['a'], e['b']))
-    return total_w, mst_edges
+                
+    is_complete = (len(mst_edges) == len(nodes) - 1)
+    return total_w, mst_edges, is_complete
 
 # =============================================================================
 # 5) MAIN DISPLAY & TABS
@@ -276,24 +325,37 @@ with tab1:
         else:
             st.error(f"⚠️ **ไม่พบเส้นทางเชื่อมต่อ!** ไม่สามารถเดินทางจาก **'{start_name}'** ไปยัง **'{end_name}'** ได้")
             st.info("💡 **คำแนะนำเพิ่มเติม:** จุดเป้าหมายแยกอยู่อย่างโดดเดี่ยว สามารถสลับไปที่แท็บ **'🎬 แอนิเมชันทีละขั้น'** แล้วใช้เครื่องมือ **`🔗 เชื่อมเส้น`** เพื่อลากเส้นเชื่อมเส้นทางเพิ่มเติมได้ครับ")
+            
     elif algo_choice == "Prim":
-        mst_cost, highlight_edges = solve_mst(st.session_state.nodes, st.session_state.edges, start_id)
-        st.success("โครงข่ายต้นไม้ครอบคลุมน้อยที่สุด (MST) ด้วย Prim")
-        st.metric("เวลารวมของทั้งโครงข่าย (MST)", f"{mst_cost} นาที")
+        mst_cost, highlight_edges, is_complete = solve_mst(st.session_state.nodes, st.session_state.edges, start_id)
+        if is_complete:
+            st.success("🎉 โครงข่ายต้นไม้ครอบคลุมน้อยที่สุด (MST) สมบูรณ์ด้วย Prim")
+            st.metric("เวลารวมของทั้งโครงข่าย (MST)", f"{mst_cost} นาที")
+        else:
+            st.warning(f"⚠️ **กราฟเชื่อมต่อไม่สมบูรณ์!** ไม่สามารถสร้าง MST ที่ครอบคลุมทุกจุดได้ (ได้เพียง {len(highlight_edges)} จาก {len(st.session_state.nodes)-1} เส้น)")
+            st.metric("เวลารวมเส้นเชื่อมที่มี (Forest)", f"{mst_cost} นาที")
+            st.info("💡 **คำแนะนำ:** กรุณาใช้เครื่องมือ `🔗 เชื่อมเส้น` ในแท็บแอนิเมชันเพื่อลากเส้นเชื่อมต่อจุดดังกล่าว")
+            
     else:
-        mst_cost, highlight_edges = solve_kruskal(st.session_state.nodes, st.session_state.edges)
-        st.success("โครงข่ายต้นไม้ครอบคลุมน้อยที่สุด (MST) ด้วย Kruskal")
-        st.metric("เวลารวมของทั้งโครงข่าย (MST)", f"{mst_cost} นาที")
+        mst_cost, highlight_edges, is_complete = solve_kruskal(st.session_state.nodes, st.session_state.edges)
+        if is_complete:
+            st.success("🎉 โครงข่ายต้นไม้ครอบคลุมน้อยที่สุด (MST) สมบูรณ์ด้วย Kruskal")
+            st.metric("เวลารวมของทั้งโครงข่าย (MST)", f"{mst_cost} นาที")
+        else:
+            st.warning(f"⚠️ **กราฟเชื่อมต่อไม่สมบูรณ์!** ไม่สามารถสร้าง MST ที่ครอบคลุมทุกจุดได้ (ได้เพียง {len(highlight_edges)} จาก {len(st.session_state.nodes)-1} เส้น)")
+            st.metric("เวลารวมเส้นเชื่อมที่มี (Forest)", f"{mst_cost} นาที")
+            st.info("💡 **คำแนะนำ:** กรุณาใช้เครื่องมือ `🔗 เชื่อมเส้น` ในแท็บแอนิเมชันเพื่อลากเส้นเชื่อมต่อจุดดังกล่าว")
 
     HTML_RESULT_CANVAS = f"""<!doctype html>
     <html lang="th">
     <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
     <style>
     :root {{ --rule:#CBD6DC; --edge:#CBD6DC; --route:#0B9A62; --ink:#142A33; --muted:#566F7B; }}
-    body {{ margin:0; background:#fff; font-family:"IBM Plex Sans Thai", sans-serif; }}
-    .canvas {{ position: relative; width: 100%; height: 520px; overflow: hidden; border: 1.5px solid var(--rule); border-radius: 12px; background: #fafafa; }}
-    .canvas svg {{ width: 100%; height: 100%; }}
+    body {{ margin:0; background:#fff; font-family:"IBM Plex Sans Thai", sans-serif; overflow-x: auto; }}
+    .canvas {{ position: relative; width: 100%; height: 620px; overflow: auto; border: 1.5px solid var(--rule); border-radius: 12px; background: #fafafa; touch-action: manipulation; }}
+    .canvas svg {{ width: 100%; min-width: 800px; height: 100%; min-height: 550px; display: block; }}
     .edge {{ stroke: var(--edge); stroke-width: 3; stroke-linecap: round; fill: none; }}
     .edge.highlight {{ stroke: var(--route); stroke-width: 8; }}
     .wbox {{ fill: #fff; stroke: var(--rule); stroke-width: 1; }}
@@ -306,7 +368,7 @@ with tab1:
     </head>
     <body>
     <div class="canvas">
-      <svg id="svg" viewBox="0 0 1000 560">
+      <svg id="svg" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet">
         <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="1.3" fill="#cbd6dc"/></pattern>
         <rect width="1000" height="560" fill="url(#grid)"/>
         <g id="layer"></g>
@@ -354,7 +416,7 @@ with tab1:
     </body>
     </html>
     """
-    components.html(HTML_RESULT_CANVAS, height=540, scrolling=True)
+    components.html(HTML_RESULT_CANVAS, height=640, scrolling=True)
 
 # --- TAB 2: ANIMATION INTERFACE ---
 with tab2:
@@ -362,6 +424,7 @@ with tab2:
     <html lang="th">
     <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
     :root {{
@@ -371,9 +434,9 @@ with tab2:
       --info-bg:rgba(28,131,225,.1); --info-fg:#004280;
     }}
     * {{ box-sizing: border-box; }}
-    body {{ margin:0; padding:0; background:#fff; font-family:"Source Sans 3","Noto Sans Thai",sans-serif; color:var(--ink); font-size:14px; }}
+    body {{ margin:0; padding:0; background:#fff; font-family:"Source Sans 3","Noto Sans Thai",sans-serif; color:var(--ink); font-size:16px; overflow-x: auto; }}
     
-    .wrap {{ max-width:1180px; margin:0 auto; padding:10px; }}
+    .wrap {{ width:100%; max-width:1400px; margin:0 auto; padding:10px; }}
     .grid {{ display: grid; grid-template-columns: 1fr 340px; gap: 16px; }}
     @media (max-width: 900px) {{ .grid {{ grid-template-columns: 1fr; }} }}
     
@@ -383,22 +446,22 @@ with tab2:
 
     button {{
       background:var(--surface); color:var(--ink); border:1px solid var(--rule); border-radius:6px;
-      padding:5px 12px; min-height:36px; cursor:pointer; font-weight:500; font-family:inherit;
+      padding:8px 16px; min-height:42px; cursor:pointer; font-weight:600; font-family:inherit; font-size: 15px;
     }}
     button:hover {{ border-color:var(--primary); color:var(--primary); }}
     button.primary, button[aria-pressed="true"] {{ background:var(--primary); border-color:var(--primary); color:#fff; }}
 
-    .canvas-container {{ position:relative; aspect-ratio:1000/560; width:100%; overflow:hidden; border:1px solid var(--rule); border-radius:10px; background:#fafafa; }}
-    .canvas-container svg {{ width:100%; height:100%; touch-action:none; display:block; }}
+    .canvas-container {{ position:relative; width:100%; height: 600px; overflow:auto; border:1px solid var(--rule); border-radius:10px; background:#fafafa; touch-action: manipulation; }}
+    .canvas-container svg {{ width:100%; min-width: 850px; height:100%; min-height: 550px; display:block; }}
     
     .edge {{ stroke:var(--edge); stroke-width:3; stroke-linecap:round; fill:none; transition: stroke 0.2s, stroke-width 0.2s; }}
     .edge.tree {{ stroke:var(--explore); stroke-width:5; }}
     .edge.path {{ stroke:var(--route); stroke-width:8; }}
     .edge.focus {{ stroke:var(--visit); stroke-width:7; }}
-    .hit {{ stroke:transparent; stroke-width:18; fill:none; }}
+    .hit {{ stroke:transparent; stroke-width:22; fill:none; cursor:pointer; }}
     
     .wbox {{ fill:var(--surface); stroke:var(--rule); stroke-width:1.2; }}
-    .wtxt {{ fill:var(--muted); font-size:11px; font-weight:500; text-anchor:middle; dominant-baseline:central; }}
+    .wtxt {{ fill:var(--muted); font-size:12px; font-weight:600; text-anchor:middle; dominant-baseline:central; }}
     
     .node {{ fill:var(--surface); stroke:var(--ink); stroke-width:3.5; cursor:grab; transition: fill 0.2s; }}
     .node:active {{ cursor:grabbing; }}
@@ -407,7 +470,7 @@ with tab2:
     .node.onpath {{ fill:var(--route); }}
     .node.pending {{ stroke:var(--explore); stroke-width:6; }}
     
-    .nlabel {{ fill:var(--ink); font-size:13px; font-weight:600; text-anchor:middle; paint-order:stroke; stroke:var(--surface); stroke-width:3.5px; pointer-events:none; }}
+    .nlabel {{ fill:var(--ink); font-size:14px; font-weight:600; text-anchor:middle; paint-order:stroke; stroke:var(--surface); stroke-width:3.5px; pointer-events:none; }}
     .ring {{ fill:none; stroke:var(--route); stroke-width:3; pointer-events:none; }}
     
     .pop {{ position:absolute; transform:translate(-50%,-130%); background:#fff; border:1px solid var(--primary); border-radius:8px; padding:8px; display:flex; gap:8px; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,0.15); }}
@@ -416,10 +479,10 @@ with tab2:
     .ctrl {{ display:grid; grid-template-columns: repeat(3, 1fr); gap:6px; margin-top:8px; }}
     .ctrl .primary {{ grid-column: 1 / -1; }}
     
-    .log-box {{ max-height:160px; overflow-y:auto; font-size:12px; background:var(--surface2); padding:8px 12px; border-radius:6px; border:1px solid var(--rule); }}
+    .log-box {{ max-height:200px; overflow-y:auto; font-size:13px; background:var(--surface2); padding:8px 12px; border-radius:6px; border:1px solid var(--rule); }}
     .log-box ol {{ margin:0; padding-left:18px; color:var(--muted); }}
     .log-box li.now {{ color:var(--ink); font-weight:600; }}
-    .alert {{ padding:10px; border-radius:6px; background:var(--info-bg); color:var(--info-fg); font-weight:500; margin-bottom:8px; }}
+    .alert {{ padding:10px; border-radius:6px; background:var(--info-bg); color:var(--info-fg); font-weight:500; margin-bottom:8px; font-size: 15px; }}
     .alert.error {{ background:rgba(207,69,39,.1); color:#CF4527; }}
     </style>
     </head>
@@ -427,7 +490,7 @@ with tab2:
 
     <div class="wrap">
       <div class="toolbar">
-        <div style="display:flex; gap:6px;" id="tools">
+        <div style="display:flex; flex-wrap:wrap; gap:6px;" id="tools">
           <button data-tool="move" aria-pressed="true">🖐️ ลากจุด</button>
           <button data-tool="link" aria-pressed="false">🔗 เชื่อมเส้น</button>
           <button data-tool="weight" aria-pressed="false">⏱️ แก้เวลา</button>
@@ -439,17 +502,17 @@ with tab2:
       <div class="grid">
         <main>
           <div class="canvas-container" id="canvas">
-            <svg id="svg" viewBox="0 0 1000 560">
+            <svg id="svg" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet">
               <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="1.3" fill="#cbd6dc"/></pattern>
               <rect width="1000" height="560" fill="url(#grid)"/>
               <g id="layer"></g>
             </svg>
             <div class="pop" id="pop" style="display:none;">
-              <label style="font-size:12px;">เวลา (นาที) <input id="popIn" type="number" min="1" max="999"></label>
+              <label style="font-size:14px;">เวลา (นาที) <input id="popIn" type="number" min="1" max="999"></label>
               <button class="primary" id="popOk">ตกลง</button>
             </div>
           </div>
-          <p id="hint" style="color:var(--muted); font-size:13px; margin:6px 0 0 0;">ลากจุดเพื่อย้ายตำแหน่ง</p>
+          <p id="hint" style="color:var(--muted); font-size:14px; margin:6px 0 0 0;">ลากจุดเพื่อย้ายตำแหน่ง</p>
         </main>
 
         <aside>
@@ -462,7 +525,7 @@ with tab2:
               <button id="btnReset">🔄 รีเซ็ต</button>
             </div>
             <div style="margin-top:10px;">
-              <label style="font-size:12px; color:var(--muted);">ความเร็ว (วินาที):</label>
+              <label style="font-size:13px; color:var(--muted);">ความเร็ว (วินาที):</label>
               <input type="range" id="speed" min="0.1" max="2" step="0.1" value="0.7" style="width:100%;">
             </div>
           </div>
@@ -499,7 +562,7 @@ with tab2:
 
       const key = (a, b) => a < b ? a + '-' + b : b + '-' + a;
       const $ = id => document.getElementById(id);
-      const svg = $('svg'), layer =$('layer');
+      const svg = $('svg'), layer = $('layer');
 
       let pending = null, drag = null, weightEdge = null;
       let steps = [], idx = -1, timer = null;
@@ -551,12 +614,11 @@ with tab2:
         }}
       }};
 
-     function buildSteps() {{
+      function buildSteps() {{
         steps = [];
         const activeNodes = nodes.filter(n => !n.isDeleted);
         
         if (algo === 'dijkstra') {{
-          // --- DIJKSTRA'S ALGORITHM ---
           const adj = {{}}; activeNodes.forEach(n => adj[n.id] = []);
           edges.forEach(e => {{ 
             if(adj[e.a] && adj[e.b]) {{
@@ -611,9 +673,9 @@ with tab2:
             }}));
           }}
         }} else if (algo === 'prim') {{
-          // --- PRIM'S ALGORITHM ---
           let inT = new Set([startId]), tree = [];
           steps.push(Object.assign({{}}, {{ msg: 'เริ่ม Prim จากจุด ' + nm(startId), current: startId, visited: [startId] }}));
+          
           while (inT.size < activeNodes.length) {{
             let best = null;
             edges.forEach(e => {{
@@ -627,8 +689,20 @@ with tab2:
               current: nv, visited: [...inT], focus: key(best.a, best.b), pathEdges: [...tree]
             }}));
           }}
+
+          if (tree.length === activeNodes.length - 1) {{
+            steps.push(Object.assign({{}}, {{
+              msg: '🎉 สำเร็จ! สร้าง Minimum Spanning Tree (MST) ครอบคลุมครบทุกจุดแล้ว',
+              pathEdges: [...tree], visited: [...inT]
+            }}));
+          }} else {{
+            steps.push(Object.assign({{}}, {{
+              msg: '⚠️ กราฟไม่เชื่อมต่อกัน! เชื่อมได้เพียง ' + inT.size + '/' + activeNodes.length + ' จุด (หลุดเป็น Forest)',
+              pathEdges: [...tree], visited: [...inT], isError: true
+            }}));
+          }}
+
         }} else if (algo === 'kruskal') {{
-          // --- KRUSKAL'S ALGORITHM (เรียงน้ำหนักน้อยไปมาก) ---
           const parent = {{}};
           activeNodes.forEach(n => parent[n.id] = n.id);
           function find(i) {{
@@ -670,8 +744,21 @@ with tab2:
             }}
             if (tree.length === activeNodes.length - 1) break;
           }}
+
+          if (tree.length === activeNodes.length - 1) {{
+            steps.push(Object.assign({{}}, {{
+              msg: '🎉 สำเร็จ! ได้ Minimum Spanning Tree (MST) ครอบคลุมครบ ' + activeNodes.length + ' จุด',
+              pathEdges: [...tree], visited: [...visitedNodes]
+            }}));
+          }} else {{
+            steps.push(Object.assign({{}}, {{
+              msg: '⚠️ ไม่สามารถสร้าง MST สมบูรณ์ได้! ได้เพียง ' + tree.length + ' เส้น จากที่ต้องการ ' + (activeNodes.length - 1) + ' เส้น (หลุดเป็น Forest)',
+              pathEdges: [...tree], visited: [...visitedNodes], isError: true
+            }}));
+          }}
         }}
       }}
+
       function render() {{
         const st = idx >= 0 ? steps[idx] : null;
         const tree = new Set(st && st.treeEdges || []);
@@ -744,7 +831,6 @@ with tab2:
 
       svg.addEventListener('pointerdown', e => {{
         const nEl = e.target.closest('[data-node]'), eEl = e.target.closest('[data-edge]');
-        const p = pt(e);
         
         if (tool !== 'weight') hidePop();
         
@@ -842,7 +928,7 @@ with tab2:
     </body>
     </html>
     """
-    components.html(HTML_ROUTE_LAB_FULL, height=660, scrolling=True)
+    components.html(HTML_ROUTE_LAB_FULL, height=750, scrolling=True)
 
 # --- TAB 3: REAL-TIME BENCHMARKING ---
 with tab3:
@@ -860,12 +946,12 @@ with tab3:
         dijk_time_ms = (t1 - t0) * 1000
 
         t0 = time.perf_counter()
-        prim_cost, _ = solve_mst(nodes, edges, start_id)
+        prim_cost, _, _ = solve_mst(nodes, edges, start_id)
         t1 = time.perf_counter()
         prim_time_ms = (t1 - t0) * 1000
 
         t0 = time.perf_counter()
-        kruskal_cost, _ = solve_kruskal(nodes, edges)
+        kruskal_cost, _, _ = solve_kruskal(nodes, edges)
         t1 = time.perf_counter()
         kruskal_time_ms = (t1 - t0) * 1000
 
@@ -898,7 +984,7 @@ with tab3:
         fastest_mst = "Prim" if prim_time_ms <= kruskal_time_ms else "Kruskal"
         st.info(f"⚡ **สรุปประสิทธิภาพ:** บนกราฟปัจจุบัน ({len(nodes)} จุด, {len(edges)} เส้นเชื่อม) อัลกอริทึมสร้าง MST ที่ประมวลผลได้เร็วที่สุดคือ **{fastest_mst}**")
 
-# --- TAB 4: REAL DYNAMIC VALIDATION ---
+# --- TAB 4: REAL DYNAMIC VALIDATION (คงการตรวจ Prim & Kruskal และแสดงกล่องเตือนเป๊ะตามภาพ) ---
 with tab4:
     st.subheader("✅ ผลการทดสอบความถูกต้องของกราฟ")
     
@@ -908,26 +994,41 @@ with tab4:
     if not nodes:
         st.warning("⚠️ แผนที่ยังไม่มีจุดใดๆ ในระบบ")
     else:
+        # 1. คำนวณหา Adjacency List และ Connected Components
         adj = {n['id']: set() for n in nodes}
         for e in edges:
             if e['a'] in adj and e['b'] in adj:
                 adj[e['a']].add(e['b'])
                 adj[e['b']].add(e['a'])
                 
+        # หาจุดโดดเดี่ยว (ไม่มีเส้นเชื่อมเลย)
         isolated_nodes = [n for n in nodes if len(adj[n['id']]) == 0]
         
-        visited = set()
-        def dfs(u):
-            visited.add(u)
-            for v in adj[u]:
-                if v not in visited:
-                    dfs(v)
+        # นับจำนวนกลุ่มกราฟย่อย (Components)
+        visited_comp = set()
+        components_list = []
+        for n in nodes:
+            nid = n['id']
+            if nid not in visited_comp:
+                comp = []
+                q = [nid]
+                visited_comp.add(nid)
+                while q:
+                    curr = q.pop(0)
+                    comp.append(curr)
+                    for neighbor in adj[curr]:
+                        if neighbor not in visited_comp:
+                            visited_comp.add(neighbor)
+                            q.append(neighbor)
+                components_list.append(comp)
         
-        start_node_id = nodes[0]['id']
-        dfs(start_node_id)
+        is_fully_connected = (len(components_list) == 1)
         
-        is_fully_connected = (len(visited) == len(nodes))
-        
+        # 2. ทดสอบความถูกต้องเฉพาะของอัลกอริทึม Prim และ Kruskal
+        _, _, prim_complete = solve_mst(nodes, edges, start_id)
+        _, _, kruskal_complete = solve_kruskal(nodes, edges)
+
+        # 3. แสดงรายงานสถานะกราฟปัจจุบัน
         st.markdown("#### 🔍 รายงานสถานะกราฟปัจจุบัน:")
         
         col_v1, col_v2, col_v3 = st.columns(3)
@@ -937,12 +1038,32 @@ with tab4:
         
         st.markdown("---")
         
-        if is_fully_connected:
+        # 4. กล่องแสดงเตือนตรงตามรูปแบบในภาพ
+        if is_fully_connected and prim_complete and kruskal_complete:
             st.success("✅ **สมบูรณ์:** ทุกจุดเชื่อมต่อกันเป็นเครือข่ายเดียว (Connected Graph) สามารถใช้อัลกอริทึม Dijkstra, Prim และ Kruskal ได้ 100%")
         else:
-            st.error(f"❌ **กราฟไม่เชื่อมต่อกันสมบูรณ์ (Disconnected Graph):** สำรวจพบ {len(nodes) - len(visited)} จุดที่ไม่สามารถเดินทางไปถึงได้จากจุดอื่น")
+            # คำนวณหาจำนวนจุดที่ไม่สามารถเดินทางไปถึงได้จากกลุ่มหลัก
+            main_comp_size = max([len(c) for c in components_list]) if components_list else 0
+            unreachable_count = len(nodes) - main_comp_size
             
+            # แสดงกล่องแจ้งเตือนสีแดง
+            st.error(f"❌ **กราฟไม่เชื่อมต่อกันสมบูรณ์ (Disconnected Graph):** สำรวจพบ {unreachable_count} จุดที่ไม่สามารถเดินทางไปถึงได้จากจุดอื่น")
+            
+        # แสดงกล่องเตือนสีเหลืองเมื่อมีจุดโดดเดี่ยว
         if isolated_nodes:
-            iso_names = ", ".join([f"**{n['name']}**" for n in isolated_nodes])
+            iso_names = ", ".join([n['name'] for n in isolated_nodes])
             st.warning(f"⚠️ **พบจุดโดดเดี่ยว (ไม่มีเส้นเชื่อมเลย):** {iso_names}")
             st.info("💡 **แนะนำ:** ใช้เครื่องมือ `🔗 เชื่อมเส้น` ในแท็บแอนิเมชันเพื่อลากเส้นเชื่อมต่อจุดดังกล่าว")
+
+        # 5. สรุปความพร้อมการทำงานของ Prim และ Kruskal
+        st.markdown("#### 🧮 การรองรับของ Prim & Kruskal:")
+        col_p, col_k = st.columns(2)
+        if prim_complete:
+            col_p.success("✅ **Prim Algorithm:** พร้อมสร้าง Minimum Spanning Tree (MST) ครอบคลุมครบทุกจุด")
+        else:
+            col_p.warning("⚠️ **Prim Algorithm:** สร้างได้เพียงโครงข่ายย่อย (Spanning Forest) เนื่องจากกราฟไม่เชื่อมต่อกัน")
+            
+        if kruskal_complete:
+            col_k.success("✅ **Kruskal Algorithm:** พร้อมสร้าง Minimum Spanning Tree (MST) ครอบคลุมครบทุกจุด")
+        else:
+            col_k.warning("⚠️ **Kruskal Algorithm:** สร้างได้เพียงโครงข่ายย่อย (Spanning Forest) เนื่องจากกราฟไม่เชื่อมต่อกัน")
